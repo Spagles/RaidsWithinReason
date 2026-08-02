@@ -26,15 +26,22 @@ namespace RaidsWithinReason
             Map     map     = (Map)parms.target;
             Faction faction = parms.faction ?? Find.FactionManager.RandomEnemyFaction(allowHidden: false, allowDefeated: false, allowNonHumanlike: false);
             if (faction == null) { Log.Warning("[RWR] No valid humanlike enemy faction found."); return false; }
+            if (!RWR_FactionRules.ShouldSendNegotiator(faction))
+            {
+                Log.Warning($"[RWR] Faction '{faction.Name}' is not eligible to send negotiators.");
+                return false;
+            }
 
             NegotiationRequest request = SelectRequest(faction, map);
             if (request == null) { Log.Warning($"[RWR] SelectRequest returned null."); return false; }
 
-            // Calculate amount based on Market Value and Wealth
+            // Scale the demand off what the colony actually has in stock of this resource, so
+            // it's usually payable but occasionally deliberately out of reach.
             if (request.template.demandType == NegotiationDemandType.Goods)
             {
-                float targetValue = 500f + (map.wealthWatcher.WealthTotal * 0.01f); // 1% of wealth + 500 base
-                request.amount = Mathf.Max(1, Mathf.RoundToInt(targetValue / request.thingDef.BaseMarketValue));
+                int   stocked    = ColonyStateReader.GetStockedAmount(map, request.thingDef);
+                float multiplier = Rand.Range(0.4f, 1.3f);
+                request.amount   = Mathf.Max(1, Mathf.RoundToInt(stocked * multiplier));
             }
             else
             {
@@ -174,7 +181,14 @@ namespace RaidsWithinReason
 
         private static string BuildLetterText(Faction faction, NegotiationRequest request)
         {
-            return "RWR_NegotiatorArrivalLetterText".Translate(faction.Name, request.template.targetDescription, request.TargetDescription, request.template.timeLimitDays);
+            string reason = RWR_Vocabulary.PickDemandReason(
+                request.template.linkedGoalType,
+                request.template.targetDescription);
+            if (reason.NullOrEmpty())
+                reason = request.template.targetDescription;
+
+            return "RWR_NegotiatorArrivalLetterText".Translate(
+                faction.Name, reason, request.TargetDescription, request.template.timeLimitDays);
         }
     }
 
@@ -199,94 +213,98 @@ namespace RaidsWithinReason
         {
             var opt = new DiaOption("RWR_OptionAccept".Translate());
             opt.resolveTree = true;
-            opt.action = () =>
-            {
-                string thingLabel = request.thingDef?.label ?? "silver";
-                
-                if (request.template.demandType == NegotiationDemandType.Goods)
-                {
-                    int available = ColonyStateReader.GetStockedAmount(incidentMap, request.thingDef);
-                    if (available < request.amount)
-                    {
-                        string failText = "RWR_DemandFailNotEnough".Translate(thingLabel, request.amount, available);
-                        Find.WindowStack.Add(new Dialog_MessageBox(failText));
-                        return;
-                    }
-
-                    string confirmText = "RWR_DemandConfirmDeliver".Translate(request.amount, thingLabel, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
-                    Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
-                    {
-                        int taken = NegotiatorUtil.ConsumeResources(incidentMap, request.thingDef, request.amount);
-                        if (taken >= request.amount)
-                        {
-                            Messages.Message("RWR_MessageDeliveredSuccessfully".Translate(request.amount, thingLabel), MessageTypeDefOf.PositiveEvent);
-                            negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
-                            Find.LetterStack.RemoveLetter(this);
-                        }
-                        else
-                        {
-                            Messages.Message("RWR_MessageConsumeError".Translate(taken, thingLabel), MessageTypeDefOf.RejectInput);
-                        }
-                    }));
-                }
-                else if (request.template.demandType == NegotiationDemandType.Pawn)
-                {
-                    Pawn prisoner = request.targetPawn;
-                    if (prisoner == null || prisoner.Dead || prisoner.Destroyed || !prisoner.IsPrisonerOfColony)
-                    {
-                        Find.WindowStack.Add(new Dialog_MessageBox("RWR_DemandPrisonerUnavailable".Translate()));
-                        return;
-                    }
-
-                    string confirmText = "RWR_DemandConfirmHandover".Translate(prisoner.LabelShort, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
-                    Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
-                    {
-                        if (NegotiatorUtil.HandoverPrisoner(prisoner, negotiator, incidentMap))
-                        {
-                            negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
-                            Find.LetterStack.RemoveLetter(this);
-                        }
-                    }));
-                }
-                else
-                {
-                    string confirmText = "RWR_DemandConfirmQuest".Translate(request.TargetDescription, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
-
-                    Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
-                    {
-                        Slate slate = new Slate();
-                        slate.Set("request",      request);
-                        slate.Set("faction",      relatedFaction);
-                        slate.Set("map",          incidentMap);
-
-                        Quest quest = QuestGen.Generate(DefDatabase<QuestScriptDef>.GetNamed("RWR_NegotiatorDemand"), slate);
-                        Find.QuestManager.Add(quest);
-                        quest.Accept(null);
-
-                        negotiatorLord?.ReceiveMemo("NegotiatorAccepted");
-                        Find.LetterStack.RemoveLetter(this);
-                    }));
-                }
-            };
+            opt.action = ExecuteAccept;
             return opt;
+        }
+
+        public void ExecuteAccept()
+        {
+            string thingLabel = request.thingDef?.label ?? "silver";
+
+            if (request.template.demandType == NegotiationDemandType.Goods)
+            {
+                int available = ColonyStateReader.GetStockedAmount(incidentMap, request.thingDef);
+                if (available < request.amount)
+                {
+                    string failText = "RWR_DemandFailNotEnough".Translate(thingLabel, request.amount, available);
+                    Find.WindowStack.Add(new Dialog_MessageBox(failText));
+                    return;
+                }
+
+                string confirmText = "RWR_DemandConfirmDeliver".Translate(request.amount, thingLabel, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
+                Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
+                {
+                    int taken = NegotiatorUtil.ConsumeResources(incidentMap, request.thingDef, request.amount);
+                    if (taken >= request.amount)
+                    {
+                        Messages.Message("RWR_MessageDeliveredSuccessfully".Translate(request.amount, thingLabel), MessageTypeDefOf.PositiveEvent);
+                        negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
+                        Find.LetterStack.RemoveLetter(this);
+                    }
+                    else
+                    {
+                        Messages.Message("RWR_MessageConsumeError".Translate(taken, thingLabel), MessageTypeDefOf.RejectInput);
+                    }
+                }));
+            }
+            else if (request.template.demandType == NegotiationDemandType.Pawn)
+            {
+                Pawn prisoner = request.targetPawn;
+                if (prisoner == null || prisoner.Dead || prisoner.Destroyed || !prisoner.IsPrisonerOfColony)
+                {
+                    Find.WindowStack.Add(new Dialog_MessageBox("RWR_DemandPrisonerUnavailable".Translate()));
+                    return;
+                }
+
+                string confirmText = "RWR_DemandConfirmHandover".Translate(prisoner.LabelShort, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
+                Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
+                {
+                    if (NegotiatorUtil.HandoverPrisoner(prisoner, negotiator, incidentMap))
+                    {
+                        negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
+                        Find.LetterStack.RemoveLetter(this);
+                    }
+                }));
+            }
+            else
+            {
+                string confirmText = "RWR_DemandConfirmQuest".Translate(request.TargetDescription, relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate());
+
+                Find.WindowStack.Add(Dialog_MessageBox.CreateConfirmation(confirmText, () =>
+                {
+                    Slate slate = new Slate();
+                    slate.Set("request",      request);
+                    slate.Set("faction",      relatedFaction);
+                    slate.Set("map",          incidentMap);
+
+                    Quest quest = QuestGen.Generate(DefDatabase<QuestScriptDef>.GetNamed("RWR_NegotiatorDemand"), slate);
+                    Find.QuestManager.Add(quest);
+                    quest.Accept(null);
+
+                    negotiatorLord?.ReceiveMemo("NegotiatorAccepted");
+                    Find.LetterStack.RemoveLetter(this);
+                }));
+            }
         }
 
         private DiaOption OptionRefuse()
         {
             var opt = new DiaOption("RWR_OptionRefuse".Translate());
             opt.resolveTree = true;
-            opt.action = () =>
-            {
-                RaidGoalDef goal = DefDatabase<RaidGoalDef>.GetNamedSilentFail($"RaidGoal_{request.template.linkedGoalType}");
-                NegotiatorUtil.ScheduleRetaliation(relatedFaction, incidentMap, goal);
-                negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
-                Find.LetterStack.RemoveLetter(this);
-                Find.LetterStack.ReceiveLetter(
-                    "RWR_RefusedDemandLetterTitle".Translate(),
-                    "RWR_RefusedDemandLetterText".Translate(relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate()),
-                    LetterDefOf.NegativeEvent);
-            };
+            opt.action = ExecuteRefuse;
             return opt;
+        }
+
+        public void ExecuteRefuse()
+        {
+            RaidGoalDef goal = DefDatabase<RaidGoalDef>.GetNamedSilentFail($"RaidGoal_{request.template.linkedGoalType}");
+            NegotiatorUtil.ScheduleRetaliation(relatedFaction, incidentMap, goal);
+            negotiatorLord?.ReceiveMemo("NegotiatorDismissed");
+            Find.LetterStack.RemoveLetter(this);
+            Find.LetterStack.ReceiveLetter(
+                "RWR_RefusedDemandLetterTitle".Translate(),
+                "RWR_RefusedDemandLetterText".Translate(relatedFaction?.Name ?? (string)"RWR_UnknownFaction".Translate()),
+                LetterDefOf.NegativeEvent);
         }
 
         private DiaOption OptionIgnore()

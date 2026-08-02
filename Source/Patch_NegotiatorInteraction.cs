@@ -4,6 +4,7 @@ using HarmonyLib;
 using RimWorld;
 using UnityEngine;
 using Verse;
+using Verse.AI;
 using Verse.AI.Group;
 
 namespace RaidsWithinReason
@@ -14,7 +15,7 @@ namespace RaidsWithinReason
         [HarmonyPostfix]
         public static void Postfix(Pawn __instance, ref bool __result)
         {
-            if (NegotiatorUtil.IsNegotiator(__instance))
+            if (NegotiatorUtil.IsNegotiationPartyMember(__instance) && !NegotiatorUtil.IsEscalated(__instance))
                 __result = true;
         }
     }
@@ -25,12 +26,12 @@ namespace RaidsWithinReason
         [HarmonyPrefix]
         public static bool Prefix(Thing a, Thing b, ref bool __result)
         {
-            if (a is Pawn p1 && NegotiatorUtil.IsNegotiator(p1) && !NegotiatorUtil.IsEscalated(p1))
+            if (a is Pawn p1 && NegotiatorUtil.IsNegotiationPartyMember(p1) && !NegotiatorUtil.IsEscalated(p1))
             {
                 __result = false;
                 return false;
             }
-            if (b is Pawn p2 && NegotiatorUtil.IsNegotiator(p2) && !NegotiatorUtil.IsEscalated(p2))
+            if (b is Pawn p2 && NegotiatorUtil.IsNegotiationPartyMember(p2) && !NegotiatorUtil.IsEscalated(p2))
             {
                 __result = false;
                 return false;
@@ -45,7 +46,7 @@ namespace RaidsWithinReason
         [HarmonyPrefix]
         public static bool Prefix(Thing t, Faction fac, ref bool __result)
         {
-            if (t is Pawn p && NegotiatorUtil.IsNegotiator(p) && !NegotiatorUtil.IsEscalated(p))
+            if (t is Pawn p && NegotiatorUtil.IsNegotiationPartyMember(p) && !NegotiatorUtil.IsEscalated(p))
             {
                 __result = false;
                 return false;
@@ -54,27 +55,16 @@ namespace RaidsWithinReason
         }
     }
 
-    // Trigger immediate retaliation if the negotiator is murdered.
-    [HarmonyPatch(typeof(Pawn), nameof(Pawn.Kill))]
-    public static class Patch_Pawn_Kill_Negotiator
-    {
-        [HarmonyPrefix]
-        public static void Prefix(Pawn __instance)
-        {
-            if (NegotiatorUtil.IsNegotiator(__instance))
-            {
-                NegotiatorUtil.PerformDamageEscalation(__instance, "Pawn.Kill");
-            }
-        }
-    }
-
+    // Non-lethal damage (both negotiator and guards) escalates the party to fight back.
+    // Lethal damage on the negotiator is handled solely by Patch_Pawn_Kill (Pawn.Kill) to
+    // avoid double-triggering the same event.
     [HarmonyPatch(typeof(Pawn), "PostApplyDamage")]
     public static class Patch_Pawn_PostApplyDamage_Negotiator
     {
         [HarmonyPostfix]
         public static void Postfix(Pawn __instance, DamageInfo dinfo)
         {
-            if (dinfo.Amount > 0.1f && NegotiatorUtil.IsNegotiator(__instance))
+            if (dinfo.Amount > 0.1f && NegotiatorUtil.IsNegotiationPartyMember(__instance))
             {
                 NegotiatorUtil.PerformDamageEscalation(__instance, $"Damage({dinfo.Def.defName})");
             }
@@ -95,6 +85,17 @@ namespace RaidsWithinReason
 
             if (!selPawn.IsColonistPlayerControlled) yield break;
             if (!(__instance is Pawn target) || !NegotiatorUtil.IsNegotiator(target)) yield break;
+
+            // Accept/Refuse: only while a matching unresolved arrival letter is still on the
+            // stack — resolving either one removes the letter, so these disappear on their own.
+            ChoiceLetter_NegotiatorArrival letter = Find.LetterStack.LettersListForReading
+                .OfType<ChoiceLetter_NegotiatorArrival>()
+                .FirstOrDefault(l => l.negotiator == target);
+            if (letter != null)
+            {
+                yield return new FloatMenuOption("RWR_MenuOptionAcceptDemand".Translate(), letter.ExecuteAccept);
+                yield return new FloatMenuOption("RWR_MenuOptionRefuseDemand".Translate(), letter.ExecuteRefuse);
+            }
 
             var visitJob = target.GetLord()?.LordJob as LordJob_NegotiatorVisit;
             if (visitJob?.request == null) yield break;
@@ -192,6 +193,13 @@ namespace RaidsWithinReason
             if (_hediffDef == null)
                 _hediffDef = DefDatabase<HediffDef>.GetNamedSilentFail("RWR_Negotiator");
             return _hediffDef != null && (pawn.health?.hediffSet?.HasHediff(_hediffDef) ?? false);
+        }
+
+        // Covers the negotiator AND their escort guards, since the whole party should be
+        // safe from auto-attack, not just the hediff carrier.
+        internal static bool IsNegotiationPartyMember(Pawn pawn)
+        {
+            return pawn?.GetLord()?.LordJob is LordJob_NegotiatorVisit;
         }
 
         internal static bool IsEscalated(Pawn pawn)
@@ -297,7 +305,47 @@ namespace RaidsWithinReason
                 // 2. Spawn external reinforcement raid with 'Retaliation' goal
                 RaidGoalDef goal = DefDatabase<RaidGoalDef>.GetNamedSilentFail("RaidGoal_Retaliation");
                 NegotiatorUtil.TriggerImmediateRaid(faction, map, goal, 1.2f, pawn);
+
+                // 3. Harming anyone in the party (negotiator or guard) resolves the pending
+                // demand as refused. No extra goodwill penalty here — that's reserved for an
+                // actual kill (see Patch_Pawn_Kill.HandleNegotiatorKilled / HandleGuardKilled).
+                CancelActiveQuest(faction);
+                RemoveOpenNegotiatorLetter(GetNegotiatorPawn(lord));
             }
+        }
+
+        // Ends the active negotiation-demand quest for this faction, if any (e.g. the demand
+        // was accepted and is awaiting delivery). Shared by the Kill and Damage escalation paths.
+        internal static void CancelActiveQuest(Faction faction)
+        {
+            foreach (Quest quest in Find.QuestManager.QuestsListForReading.ToList()
+                     .Where(q => q.State == QuestState.Ongoing))
+            {
+                if (quest.PartsListForReading.OfType<QuestPart_TimerExpiry>().Any(p => p.faction == faction))
+                {
+                    quest.End(QuestEndOutcome.Fail, sendLetter: false);
+                    break;
+                }
+            }
+        }
+
+        // Removes a still-open arrival letter for this negotiator, if any (otherwise it's
+        // orphaned when the negotiator is harmed/killed before the player answers it).
+        internal static void RemoveOpenNegotiatorLetter(Pawn negotiator)
+        {
+            if (negotiator == null) return;
+            ChoiceLetter_NegotiatorArrival letter = Find.LetterStack.LettersListForReading
+                .OfType<ChoiceLetter_NegotiatorArrival>()
+                .FirstOrDefault(l => l.negotiator == negotiator);
+            if (letter != null)
+                Find.LetterStack.RemoveLetter(letter);
+        }
+
+        // Resolves the actual hediff-carrying negotiator from any pawn in the same party —
+        // needed when the pawn that got hit/killed is a guard, not the negotiator themself.
+        internal static Pawn GetNegotiatorPawn(Lord lord)
+        {
+            return lord?.ownedPawns.FirstOrDefault(IsNegotiator);
         }
 
         internal static void TriggerImmediateRaid(Faction faction, Map map, RaidGoalDef goal, float pointsMultiplier = 1f, Pawn target = null)

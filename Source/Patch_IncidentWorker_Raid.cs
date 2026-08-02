@@ -24,10 +24,22 @@ namespace RaidsWithinReason
         [HarmonyPrefix]
         public static bool Prefix(IncidentWorker __instance, IncidentParms parms, ref bool __result)
         {
-            if (!(__instance is IncidentWorker_Raid)) return true;
+            // Only enemy raids — never friendly military aid / RaidFriendly.
+            if (!RWR_FactionRules.IsEnemyRaidWorker(__instance)) return true;
 
             // Goal already set or explicitly requested to skip mod interception.
             if (_debugForceGoal || _skipInterception || _pendingGoal != null) return true;
+
+            // Never touch quick military-aid arrivals.
+            if (RWR_FactionRules.IsMilitaryAid(parms)) return true;
+
+            // Vanilla resolves parms.faction inside TryExecuteWorker, after our Prefix.
+            // Resolve it early so ShouldIntercept and goal selection have a real faction.
+            if (parms.faction == null)
+            {
+                bool resolved = (bool)Traverse.Create(__instance).Method("TryResolveRaidFaction", parms).GetValue();
+                if (!resolved) return true;
+            }
 
             Map     map     = parms.target as Map;
             Faction faction = parms.faction;
@@ -54,7 +66,8 @@ namespace RaidsWithinReason
 
             if (map == null || faction == null) return true;
 
-            // Chaotic raid: skip goal assignment entirely and let vanilla behaviour handle it.
+            // Chaotic raid / non-eligible faction: skip goal assignment.
+            if (!RWR_FactionRules.ShouldUseGoals(faction)) return true;
             if (Rand.Chance(RWR_Mod.Settings.chaoticRaidChance)) return true;
 
             _pendingGoal    = RaidGoalEvaluator.SelectGoal(parms, faction, map);
@@ -76,34 +89,26 @@ namespace RaidsWithinReason
             if (map == null || faction == null) return;
 
             Lord raidLord = map.lordManager?.lords.LastOrDefault(l => l?.faction == faction);
-            if (raidLord != null && map.GetComponent<RaidGoalTracker>()?.GetGoal(raidLord) != null)
-            {
-                Pawn targetPawn = null;
-                if (goal.goalType == RaidGoalType.Revenge)
-                {
-                    targetPawn = ColonyStateReader.GetRandomNotableColonist(map);
-                    if (targetPawn != null)
-                        map.GetComponent<RaidGoalTracker>().SetTargetPawn(raidLord, targetPawn);
-                }
-                else if (goal.goalType == RaidGoalType.Capture)
-                {
-                    targetPawn = ColonyStateReader.GetRandomNotableColonist(map);
-                    if (targetPawn != null)
-                        map.GetComponent<RaidGoalTracker>().SetTargetPawn(raidLord, targetPawn);
-                }
 
-                if (RWR_Mod.Settings.enableGoalLetters)
+            Pawn targetPawn = null;
+            if (goal.goalType == RaidGoalType.Revenge || goal.goalType == RaidGoalType.Capture)
+            {
+                targetPawn = ColonyStateReader.GetRandomNotableColonist(map);
+                if (targetPawn != null && raidLord != null)
+                    map.GetComponent<RaidGoalTracker>()?.SetTargetPawn(raidLord, targetPawn);
+            }
+
+            if (RWR_Mod.Settings.enableGoalLetters)
+            {
+                var letter = new ChoiceLetter_RaidGoalAnnouncement
                 {
-                    var letter = new ChoiceLetter_RaidGoalAnnouncement
-                    {
-                        def            = DefDatabase<LetterDef>.GetNamed("RWR_RaidGoalAnnouncement"),
-                        Label          = "RWR_RaidGoalLetterLabel".Translate(faction.Name),
-                        Text           = BuildLetterText(faction, goal, targetPawn),
-                        lookTargets    = targetPawn != null ? new LookTargets(targetPawn) : new LookTargets(map.Parent),
-                        relatedFaction = faction,
-                    };
-                    Find.LetterStack.ReceiveLetter(letter);
-                }
+                    def            = DefDatabase<LetterDef>.GetNamed("RWR_RaidGoalAnnouncement"),
+                    Label          = "RWR_RaidGoalLetterLabel".Translate(faction.Name),
+                    Text           = BuildLetterText(faction, goal, targetPawn),
+                    lookTargets    = targetPawn != null ? new LookTargets(targetPawn) : new LookTargets(map.Parent),
+                    relatedFaction = faction,
+                };
+                Find.LetterStack.ReceiveLetter(letter);
             }
         }
 
@@ -111,8 +116,7 @@ namespace RaidsWithinReason
         private static bool ShouldIntercept(Faction faction, Map map)
         {
             if (faction == null || map == null) return false;
-            if (!faction.def.humanlikeFaction) return false; // mechanoids and insects don't negotiate
-            if (faction.PlayerRelationKind != FactionRelationKind.Hostile) return false; // only hostile factions should negotiate
+            if (!RWR_FactionRules.ShouldSendNegotiator(faction)) return false;
             if (!Rand.Chance(RWR_Mod.Settings.negotiationChance)) return false;
 
             var cooldown = Current.Game.GetComponent<NegotiatorCooldownComponent>();
@@ -126,7 +130,7 @@ namespace RaidsWithinReason
                 ? (string)"RWR_RaidGoalRetreatYes".Translate()
                 : (string)"RWR_RaidGoalRetreatNo".Translate();
 
-            string desc = goal.targetDescription;
+            string desc = RWR_Vocabulary.PickGoalReason(goal.goalType, goal.targetDescription);
             if (goal.goalType == RaidGoalType.Revenge && target != null)
             {
                 desc = "RWR_RaidGoalDescRevenge".Translate(target.NameShortColored.Resolve());
@@ -153,9 +157,9 @@ namespace RaidsWithinReason
             
             // If spawned via certain debug actions or custom mods, the overarching
             // IncidentWorker may not have cached a pending goal. We generate a fallback here.
-            if (pending == null && faction != null && faction.HostileTo(Faction.OfPlayer))
+            if (pending == null && RWR_FactionRules.ShouldUseGoals(faction))
             {
-                if (!Rand.Chance(RWR_Mod.Settings.chaoticRaidChance) && faction.def.humanlikeFaction)
+                if (!Rand.Chance(RWR_Mod.Settings.chaoticRaidChance))
                 {
                     pending = RaidGoalEvaluator.SelectGoal(null, faction, map);
                 }

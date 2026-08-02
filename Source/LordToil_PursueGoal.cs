@@ -165,6 +165,12 @@ namespace RaidsWithinReason
 
                 case RaidGoalType.Destroy:
                 {
+                    Building current = tracker?.GetTargetBuilding(lord);
+                    if (current != null && !current.Destroyed)
+                    {
+                        targetCell = current.Position;
+                        break;
+                    }
                     Room room  = ColonyStateReader.GetRandomRoomByPurpose(map);
                     Building b = room != null ? FindPrimaryBuilding(room, map) : null;
                     targetCell = b?.Position ?? (room != null ? room.Cells.RandomElement() : IntVec3.Invalid);

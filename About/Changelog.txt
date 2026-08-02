@@ -1,0 +1,27 @@
+Raids Within Reason - Changelog
+
+1.4.0
+Negotiator improvements:
+- Negotiator escort guards are now protected from auto-attack (turrets, self-defense, etc.) the same way the negotiator already was.
+- Any attack on the negotiator or their guards — lethal or not — correctly ends the negotiation as refused (demand quest fails, arrival letter closes).
+- Fixed a bug where killing the negotiator could trigger two conflicting internal responses at once, sometimes causing duplicate retaliation raids, or surviving guards calmly walking off the map instead of fighting back.
+- Added right-click "Accept demand" / "Refuse demand" options directly on the negotiator (no need to open the arrival letter).
+- Demanded goods are scaled to how much of that resource you actually have in stock, instead of total colony wealth. Demands are usually payable, but occasionally still a stretch on purpose.
+
+Bugfixes:
+- Insects, mechanoids, and other non-humanlike factions no longer receive raid objectives or "failed objective" letters.
+- Fixed off-map revenge spam: wiping enemies at quest sites, relic missions, or caravan camps no longer queues a home-base revenge raid for every dissolved lord (including insect waves). Revenge now requires a tracked RWR raid, is humanlike-only, respects a per-faction cooldown (default 5 days), and will not stack duplicates.
+- Calling allies for military backup no longer risks being turned into a negotiator visit. Negotiation interception only applies to enemy raids (IncidentWorker_RaidEnemy) and skips quick military-aid arrivals.
+- Goals are no longer assigned to friendly or non-hostile forces.
+- Fixed kidnapping raids appearing far too often when the colony held any prisoners. Capture goals are now scored from free colonists at a moderate weight, not from having prisoners.
+
+Features:
+- Per-faction settings: in Mod Options → Factions, override whether a specific faction may send negotiators and/or use purposeful raid goals.
+- Custom vocabulary library: in Mod Options → Vocabulary, edit the full phrase list (defaults are included; add or remove freely). One phrase is picked at random per announcement.
+- Expanded default negotiation demands (silver, medicine, components, steel) and more built-in reason phrases for loot, capture, destroy, revenge, and retaliation.
+- New option: enable/disable off-map revenge and set its per-faction cooldown.
+
+1.2.0 and earlier
+- Auto-translate support and negotiation fixes for factions that shouldn't be hostile.
+- Various bugfixes to alerts and raid goal tracking.
+- Initial release: contextual raid goals (Loot, Capture, Destroy, Revenge), the negotiator/negotiation system, and dynamic raid AI.

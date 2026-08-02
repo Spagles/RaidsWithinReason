@@ -3,6 +3,7 @@
   <packageId>SurpriZez.RaidsWithinReason</packageId>
   <name>Raids Within Reason</name>
   <author>SurpriZez</author>
+  <modVersion>1.4.0</modVersion>
   <supportedVersions>
     <li>1.6</li>
   </supportedVersions>
@@ -13,6 +14,8 @@ Features:
 - Negotiation System: Hostile factions may send a negotiator first to make demands or announce their intent. Comply, refuse, or escalate.
 - Rescue Missions: Harm or arrest a negotiator to trigger high-intensity rescue raids.
 - Dynamic AI: Objectives integrate with standard raid types (Assault, Siege, Staged), making every encounter unique.
+- Per-faction settings: choose which factions send negotiators and which use purposeful goals.
+- Custom vocabulary: add your own objective phrases for raid reasons and demands.
 
 Developed by SurpriZez.</description>
 </ModMetaData>

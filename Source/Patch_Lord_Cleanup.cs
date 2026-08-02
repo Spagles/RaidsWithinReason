@@ -44,20 +44,34 @@ namespace RaidsWithinReason
             tracker.Cleanup(__instance);
         }
 
-        // When the player wipes enemy forces on a non-player map, schedule a Revenge raid.
+        // When the player wipes a tracked RWR raid on a non-player map, schedule a Revenge raid
+        // on the home base — throttled so quest sites / caravan camps don't spam small raids.
         private static void TryTriggerRevenge(Lord lord, Map map)
         {
+            if (!RWR_Mod.Settings.enableOffMapRevenge) return;
             if (map.IsPlayerHome) return;
             if (!map.mapPawns.AnyColonistSpawned) return;
 
             Faction faction = lord.faction;
-            if (faction == null || faction == Faction.OfPlayer) return;
-            if (!faction.HostileTo(Faction.OfPlayer)) return;
-            if (faction.defeated) return;
+            if (!RWR_FactionRules.IsHumanlikeHostile(faction)) return;
+
+            // Only retaliate for raids this mod was actually tracking (prevents insects,
+            // ambient wildlife lords, etc. from queuing home-base revenge).
+            var tracker = map.GetComponent<RaidGoalTracker>();
+            if (tracker?.GetGoal(lord) == null) return;
 
             bool anyLeft = map.mapPawns.AllPawnsSpawned
                 .Any(p => p.Faction == faction && !p.Dead && !p.Downed);
             if (anyLeft) return;
+
+            var pending = Current.Game.GetComponent<PendingRaidComponent>();
+            if (pending == null) return;
+
+            // Don't stack multiple revenge raids for the same faction.
+            if (pending.HasPendingFor(faction, RaidGoalType.Revenge)) return;
+
+            // Per-faction cooldown so wiping several lords at a quest site only yields one response.
+            if (pending.IsOffMapRevengeOnCooldown(faction)) return;
 
             RaidGoalDef revenge = DefDatabase<RaidGoalDef>.GetNamedSilentFail("RaidGoal_Revenge");
             if (revenge == null) return;
@@ -66,7 +80,8 @@ namespace RaidsWithinReason
             if (homeMap == null) return;
 
             int delay = Rand.Range(GenDate.TicksPerDay, 3 * GenDate.TicksPerDay);
-            Current.Game.GetComponent<PendingRaidComponent>()?.Enqueue(faction, homeMap, delay, revenge);
+            pending.Enqueue(faction, homeMap, delay, revenge);
+            pending.RecordOffMapRevenge(faction);
 
             Messages.Message(
                 "RWR_MessageRoutedRetaliation".Translate(faction.Name),
@@ -85,7 +100,8 @@ namespace RaidsWithinReason
                 : (string)"RWR_PostRaidTitleFailure".Translate(factionName);
 
             string outcome = succeeded
-                ? (string)"RWR_PostRaidOutcomeSuccess".Translate(goal.targetDescription)
+                ? (string)"RWR_PostRaidOutcomeSuccess".Translate(
+                    RWR_Vocabulary.PickGoalReason(goal.goalType, goal.targetDescription))
                 : (string)"RWR_PostRaidOutcomeFailure".Translate(factionName);
 
             string goodwillLine = deltaRounded > 0

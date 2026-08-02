@@ -71,7 +71,8 @@ namespace RaidsWithinReason
         private static void HandleNegotiatorKilled(Pawn pawn, Lord lord, LordJob_NegotiatorVisit visitJob,
                                                    Faction faction, Map map)
         {
-            CancelActiveQuest(faction);
+            NegotiatorUtil.CancelActiveQuest(faction);
+            NegotiatorUtil.RemoveOpenNegotiatorLetter(pawn);
 
             int penalty = -(Rand.Range(40, 61));
             faction.TryAffectGoodwillWith(Faction.OfPlayer, penalty,
@@ -89,7 +90,12 @@ namespace RaidsWithinReason
                 LetterDefOf.ThreatBig,
                 new LookTargets(pawn));
 
-            lord.ReceiveMemo("NegotiatorDismissed");
+            // Record escalation so a guard hit right after doesn't also spawn a redundant
+            // bonus raid via PerformDamageEscalation.
+            Current.Game.GetComponent<NegotiatorCooldownComponent>()?.RecordLordEscalated(lord.loadID);
+
+            // Surviving guards fight back rather than calmly leaving (was "NegotiatorDismissed").
+            lord.ReceiveMemo("NegotiatorAssault");
         }
 
         private static void HandleGuardKilled(Pawn pawn, Lord lord, Faction faction)
@@ -97,44 +103,17 @@ namespace RaidsWithinReason
             faction.TryAffectGoodwillWith(Faction.OfPlayer, -15,
                 canSendMessage: false, canSendHostilityLetter: false);
 
-            // Negotiator departs — demand still active but time limit is halved
-            lord.ReceiveMemo("NegotiatorDismissed");
-            HalveQuestTimeLimit(faction);
+            NegotiatorUtil.CancelActiveQuest(faction);
+            NegotiatorUtil.RemoveOpenNegotiatorLetter(NegotiatorUtil.GetNegotiatorPawn(lord));
+            Current.Game.GetComponent<NegotiatorCooldownComponent>()?.RecordLordEscalated(lord.loadID);
+
+            // Surviving party fights back rather than calmly leaving (was "NegotiatorDismissed").
+            lord.ReceiveMemo("NegotiatorAssault");
 
             Messages.Message(
                 "RWR_MessageGuardKilled".Translate(faction.Name),
                 new LookTargets(pawn),
                 MessageTypeDefOf.NegativeEvent);
-        }
-
-        private static void CancelActiveQuest(Faction faction)
-        {
-            foreach (Quest quest in Find.QuestManager.QuestsListForReading.ToList()
-                     .Where(q => q.State == QuestState.Ongoing))
-            {
-                if (quest.PartsListForReading.OfType<QuestPart_TimerExpiry>().Any(p => p.faction == faction))
-                {
-                    quest.End(QuestEndOutcome.Fail, sendLetter: false);
-                    break;
-                }
-            }
-        }
-
-        private static void HalveQuestTimeLimit(Faction faction)
-        {
-            foreach (Quest quest in Find.QuestManager.QuestsListForReading
-                     .Where(q => q.State == QuestState.Ongoing))
-            {
-                QuestPart_TimerExpiry timer = quest.PartsListForReading.OfType<QuestPart_TimerExpiry>()
-                    .FirstOrDefault(p => p.faction == faction);
-                if (timer == null || timer.triggered) continue;
-
-                int now       = Find.TickManager.TicksGame;
-                int remaining = timer.expiryTick - now;
-                if (remaining > 0)
-                    timer.expiryTick = now + remaining / 2;
-                break;
-            }
         }
     }
 }

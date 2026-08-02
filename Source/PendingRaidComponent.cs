@@ -26,7 +26,8 @@ namespace RaidsWithinReason
     // Holds raids that must fire after a fixed delay (e.g. negotiator killing).
     public class PendingRaidComponent : GameComponent
     {
-        private List<PendingRaid> pending = new List<PendingRaid>();
+        private List<PendingRaid>        pending = new List<PendingRaid>();
+        private Dictionary<Faction, int> lastOffMapRevengeTick = new Dictionary<Faction, int>();
 
         public PendingRaidComponent(Game game) : base() { }
 
@@ -39,6 +40,26 @@ namespace RaidsWithinReason
                 triggerTick = Find.TickManager.TicksGame + delayTicks,
                 forcedGoal  = forcedGoal,
             });
+        }
+
+        public bool HasPendingFor(Faction faction, RaidGoalType goalType)
+        {
+            if (faction == null) return false;
+            return pending.Any(p => p.faction == faction && p.forcedGoal?.goalType == goalType);
+        }
+
+        public bool IsOffMapRevengeOnCooldown(Faction faction)
+        {
+            if (faction == null) return false;
+            if (!lastOffMapRevengeTick.TryGetValue(faction, out int tick)) return false;
+            int cooldown = RWR_Mod.Settings.offMapRevengeCooldownDays * GenDate.TicksPerDay;
+            return Find.TickManager.TicksGame - tick < cooldown;
+        }
+
+        public void RecordOffMapRevenge(Faction faction)
+        {
+            if (faction == null) return;
+            lastOffMapRevengeTick[faction] = Find.TickManager.TicksGame;
         }
 
         public override void GameComponentTick()
@@ -71,27 +92,26 @@ namespace RaidsWithinReason
         private static void FireRaid(PendingRaid raid)
         {
             if (raid.map == null || raid.faction == null) return;
-
-            var priorLords = raid.map.lordManager.lords.ToHashSet();
-
-            IncidentDef   raidDef = IncidentDefOf.RaidEnemy;
-            IncidentParms parms   = StorytellerUtility.DefaultParmsNow(IncidentCategoryDefOf.ThreatBig, raid.map);
-            parms.faction         = raid.faction;
-            raidDef.Worker.TryExecute(parms);
-
-            if (raid.forcedGoal != null)
-            {
-                var tracker = raid.map.GetComponent<RaidGoalTracker>();
-                foreach (Lord newLord in raid.map.lordManager.lords
-                         .Where(l => !priorLords.Contains(l) && l.faction == raid.faction))
-                    tracker?.SetGoal(newLord, raid.forcedGoal);
-            }
+            NegotiatorUtil.TriggerImmediateRaid(raid.faction, raid.map, raid.forcedGoal);
         }
+
+        private List<Faction> _revengeKeys;
+        private List<int>     _revengeValues;
 
         public override void ExposeData()
         {
             Scribe_Collections.Look(ref pending, "pending", LookMode.Deep);
+            Scribe_Collections.Look(ref lastOffMapRevengeTick, "lastOffMapRevengeTick",
+                LookMode.Reference, LookMode.Value, ref _revengeKeys, ref _revengeValues);
+
             pending ??= new List<PendingRaid>();
+            lastOffMapRevengeTick ??= new Dictionary<Faction, int>();
+
+            if (Scribe.mode == LoadSaveMode.PostLoadInit)
+            {
+                foreach (Faction stale in lastOffMapRevengeTick.Keys.Where(k => k == null).ToList())
+                    lastOffMapRevengeTick.Remove(stale);
+            }
         }
     }
 }

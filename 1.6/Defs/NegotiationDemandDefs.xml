@@ -9,6 +9,51 @@
     <baseAmount>500</baseAmount>
     <timeLimitDays>2</timeLimitDays>
     <linkedGoalType>Loot</linkedGoalType>
+    <targetDescription>hand over food stores</targetDescription>
+  </RaidsWithinReason.NegotiationDemandDef>
+
+  <RaidsWithinReason.NegotiationDemandDef>
+    <defName>Demand_Silver</defName>
+    <label>silver demand</label>
+    <demandType>Goods</demandType>
+    <thingDef>Silver</thingDef>
+    <baseAmount>200</baseAmount>
+    <timeLimitDays>2</timeLimitDays>
+    <linkedGoalType>Loot</linkedGoalType>
+    <targetDescription>pay tribute in silver</targetDescription>
+  </RaidsWithinReason.NegotiationDemandDef>
+
+  <RaidsWithinReason.NegotiationDemandDef>
+    <defName>Demand_Medicine</defName>
+    <label>medicine demand</label>
+    <demandType>Goods</demandType>
+    <thingDef>MedicineIndustrial</thingDef>
+    <baseAmount>10</baseAmount>
+    <timeLimitDays>2</timeLimitDays>
+    <linkedGoalType>Loot</linkedGoalType>
+    <targetDescription>surrender medical supplies</targetDescription>
+  </RaidsWithinReason.NegotiationDemandDef>
+
+  <RaidsWithinReason.NegotiationDemandDef>
+    <defName>Demand_Components</defName>
+    <label>components demand</label>
+    <demandType>Goods</demandType>
+    <thingDef>ComponentIndustrial</thingDef>
+    <baseAmount>15</baseAmount>
+    <timeLimitDays>2</timeLimitDays>
+    <linkedGoalType>Loot</linkedGoalType>
+    <targetDescription>turn over industrial components</targetDescription>
+  </RaidsWithinReason.NegotiationDemandDef>
+
+  <RaidsWithinReason.NegotiationDemandDef>
+    <defName>Demand_Steel</defName>
+    <label>steel demand</label>
+    <demandType>Goods</demandType>
+    <thingDef>Steel</thingDef>
+    <baseAmount>150</baseAmount>
+    <timeLimitDays>2</timeLimitDays>
+    <linkedGoalType>Loot</linkedGoalType>
+    <targetDescription>deliver steel as tribute</targetDescription>
   </RaidsWithinReason.NegotiationDemandDef>
 
   <RaidsWithinReason.NegotiationDemandDef>
@@ -18,7 +63,7 @@
     <baseAmount>1</baseAmount>
     <timeLimitDays>1</timeLimitDays>
     <linkedGoalType>Capture</linkedGoalType>
+    <targetDescription>release a captive of theirs</targetDescription>
   </RaidsWithinReason.NegotiationDemandDef>
-
 
 </Defs>

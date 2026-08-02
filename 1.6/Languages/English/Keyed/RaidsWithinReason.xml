@@ -3,12 +3,59 @@
 
   <!-- Mod Settings -->
   <RWR_SettingsCategory>Raids Within Reason</RWR_SettingsCategory>
+  <RWR_Tab_General>General</RWR_Tab_General>
+  <RWR_Tab_Factions>Factions</RWR_Tab_Factions>
+  <RWR_Tab_Vocabulary>Vocabulary</RWR_Tab_Vocabulary>
+
   <RWR_Setting_EnableGoalLetters>Show pre-raid goal announcement letter</RWR_Setting_EnableGoalLetters>
   <RWR_Setting_EnableRetreatOnSuccess>Raiders retreat after achieving their objective</RWR_Setting_EnableRetreatOnSuccess>
   <RWR_Setting_ChaoticRaidChance>Chance a raid ignores goals and attacks randomly (0 = all raids have purpose): {0}</RWR_Setting_ChaoticRaidChance>
   <RWR_Setting_NegotiationChance>Chance faction negotiates before raiding: {0}</RWR_Setting_NegotiationChance>
   <RWR_Setting_NegotiatorCooldownDays>Min days between negotiators from same faction: {0}</RWR_Setting_NegotiatorCooldownDays>
+  <RWR_Setting_EnableOffMapRevenge>Retaliate at home after wiping a purposeful raid off-map (quest sites, caravan camps)</RWR_Setting_EnableOffMapRevenge>
+  <RWR_Setting_EnableOffMapRevengeTip>When you destroy an enemy force that had an RWR objective on a non-home map, schedule one revenge raid on your colony. Throttled per faction.</RWR_Setting_EnableOffMapRevengeTip>
+  <RWR_Setting_OffMapRevengeCooldownDays>Days between off-map revenge raids from the same faction: {0}</RWR_Setting_OffMapRevengeCooldownDays>
+
+  <RWR_Setting_FactionOverridesHelp>Override negotiator and goal behaviour per faction. Unchecked "Override" uses the global settings above.</RWR_Setting_FactionOverridesHelp>
+  <RWR_Setting_FactionOverridesNeedGame>Load or start a game to configure per-faction overrides.</RWR_Setting_FactionOverridesNeedGame>
+  <RWR_Setting_OverrideNegotiate>Override negotiator</RWR_Setting_OverrideNegotiate>
+  <RWR_Setting_AllowNegotiate>Allow negotiator</RWR_Setting_AllowNegotiate>
+  <RWR_Setting_OverrideGoals>Override goals</RWR_Setting_OverrideGoals>
+  <RWR_Setting_AllowGoals>Allow goals</RWR_Setting_AllowGoals>
+
+  <RWR_Setting_VocabularyHelp>Edit the objective phrase library. Default reasons are included; add your own or remove any line. One phrase is picked at random when a raid or demand is announced.</RWR_Setting_VocabularyHelp>
+  <RWR_Setting_VocabGoalType>Goal type</RWR_Setting_VocabGoalType>
+  <RWR_Setting_VocabAdd>Add</RWR_Setting_VocabAdd>
+  <RWR_Setting_VocabRemove>Remove</RWR_Setting_VocabRemove>
+  <RWR_Setting_VocabEmpty>No phrases in the library. Defaults will be used at runtime until you add some.</RWR_Setting_VocabEmpty>
+
   <RWR_DeliveryPointLabel>Delivery Point</RWR_DeliveryPointLabel>
+
+  <!-- Vocabulary (built-in reasons) -->
+  <RWR_Vocab_Loot_0>steal silver and other valuables</RWR_Vocab_Loot_0>
+  <RWR_Vocab_Loot_1>loot stockpiles and walk away rich</RWR_Vocab_Loot_1>
+  <RWR_Vocab_Loot_2>strip the colony of its wealth</RWR_Vocab_Loot_2>
+  <RWR_Vocab_Loot_3>seize supplies as tribute</RWR_Vocab_Loot_3>
+
+  <RWR_Vocab_Capture_0>take a colonist prisoner</RWR_Vocab_Capture_0>
+  <RWR_Vocab_Capture_1>abduct a valuable colonist</RWR_Vocab_Capture_1>
+  <RWR_Vocab_Capture_2>kidnap someone for ransom or labour</RWR_Vocab_Capture_2>
+  <RWR_Vocab_Capture_3>drag a colonist back to their camp</RWR_Vocab_Capture_3>
+
+  <RWR_Vocab_Destroy_0>demolish a prized room</RWR_Vocab_Destroy_0>
+  <RWR_Vocab_Destroy_1>wreck vital colony infrastructure</RWR_Vocab_Destroy_1>
+  <RWR_Vocab_Destroy_2>burn the finest furnishings</RWR_Vocab_Destroy_2>
+  <RWR_Vocab_Destroy_3>raze a landmark of the colony</RWR_Vocab_Destroy_3>
+
+  <RWR_Vocab_Revenge_0>kill a colonist in retaliation</RWR_Vocab_Revenge_0>
+  <RWR_Vocab_Revenge_1>settle a blood debt</RWR_Vocab_Revenge_1>
+  <RWR_Vocab_Revenge_2>make an example of a colonist</RWR_Vocab_Revenge_2>
+
+  <RWR_Vocab_Release_0>reach and free the imprisoned negotiator</RWR_Vocab_Release_0>
+  <RWR_Vocab_Release_1>break their negotiator out of captivity</RWR_Vocab_Release_1>
+
+  <RWR_Vocab_Retaliation_0>assault the colony for harming their envoy</RWR_Vocab_Retaliation_0>
+  <RWR_Vocab_Retaliation_1>punish the colony for the negotiation insult</RWR_Vocab_Retaliation_1>
 
   <!-- General -->
   <RWR_UnknownFaction>unknown faction</RWR_UnknownFaction>
@@ -38,7 +85,7 @@
   <RWR_RaidGoalRetreatNo>The raiders will not retreat even if they achieve their goal. Expect a sustained assault.</RWR_RaidGoalRetreatNo>
   <RWR_RaidGoalDescRevenge>kill {0} in retaliation</RWR_RaidGoalDescRevenge>
   <RWR_RaidGoalDescCapture>capture {0}</RWR_RaidGoalDescCapture>
-  <RWR_RaidGoalLetterText>Raiders from {0} have arrived with a specific objective:\n\n\"{1}\"\n\n{2}</RWR_RaidGoalLetterText>
+  <RWR_RaidGoalLetterText>Raiders from {0} have arrived with a specific objective:\n\n{1}\n\n{2}</RWR_RaidGoalLetterText>
 
   <!-- Negotiator Arrival Dialogs -->
   <RWR_NegotiatorArrivalLetterLabel>Negotiator Arrives</RWR_NegotiatorArrivalLetterLabel>
@@ -69,6 +116,8 @@
   <RWR_MenuOptionPrisonerReleased>Prisoner already released</RWR_MenuOptionPrisonerReleased>
   <RWR_MenuOptionHandoverPrisoner>Hand over {0} to negotiator</RWR_MenuOptionHandoverPrisoner>
   <RWR_MessagePrisonerHandedOver>{0} has been handed over and released.</RWR_MessagePrisonerHandedOver>
+  <RWR_MenuOptionAcceptDemand>Accept demand</RWR_MenuOptionAcceptDemand>
+  <RWR_MenuOptionRefuseDemand>Refuse demand</RWR_MenuOptionRefuseDemand>
   
   <!-- Negotiator Escalation Messages -->
   <RWR_MessageNegotiatorMurdered>Negotiator murdered! {0} is launching an immediate retaliatory strike!</RWR_MessageNegotiatorMurdered>
