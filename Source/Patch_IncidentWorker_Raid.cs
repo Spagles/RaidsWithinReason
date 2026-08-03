@@ -239,8 +239,10 @@ namespace RaidsWithinReason
             if (Patch_IncidentWorker_Raid_TryExecute._pendingGoal != null)
                 goal = Patch_IncidentWorker_Raid_TryExecute._pendingGoal;
             // Existing raid being loaded: pull from the ExposeData cache
-            else
-                Patch_LordJob_ExposeData.runtimeGoals.TryGetValue(__instance, out goal);
+            else if (Patch_LordJob_ExposeData.runtimeGoals.TryGetValue(__instance, out goal))
+            {
+                Patch_LordJob_ExposeData.runtimeGoals.Remove(__instance);
+            }
 
             if (goal == null) return;
 
