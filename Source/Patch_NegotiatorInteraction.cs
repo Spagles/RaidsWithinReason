@@ -64,7 +64,7 @@ namespace RaidsWithinReason
         [HarmonyPostfix]
         public static void Postfix(Pawn __instance, DamageInfo dinfo)
         {
-            if (dinfo.Amount > 0.1f && NegotiatorUtil.IsNegotiationPartyMember(__instance))
+            if (dinfo.Amount > 0.1f && !__instance.Dead && !__instance.health.ShouldBeDead() && NegotiatorUtil.IsNegotiationPartyMember(__instance))
             {
                 NegotiatorUtil.PerformDamageEscalation(__instance, $"Damage({dinfo.Def.defName})");
             }
